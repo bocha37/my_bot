@@ -94,20 +94,21 @@ async def get_activity(message: Message, state: FSMContext):
 
     tdee = round(bmr * data["activity"])
     await state.update_data(tdee=tdee)
-    await message.answer("Выберите цель:", reply_markup=get_goal_keyboard(tdee))
+    await message.answer("Выберите цель:", reply_markup=get_goal_keyboard(tdee, weight))
     await state.clear()
 
-def get_goal_keyboard(tdee: float):
+def get_goal_keyboard(tdee: float, weight: float):
     return InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔥 Похудение", callback_data=f"goal_lose_{tdee}_{tdee*0.8}")],
-        [InlineKeyboardButton(text="📈 Набор массы", callback_data=f"goal_gain_{tdee}_{tdee*1.2}")],
-        [InlineKeyboardButton(text="⚖️ Удержание веса", callback_data=f"goal_maintain_{tdee}_{tdee}")]
+        [InlineKeyboardButton(text="🔥 Похудение", callback_data=f"goal_lose_{tdee}_{tdee*0.8}_{weight}")],
+        [InlineKeyboardButton(text="📈 Набор массы", callback_data=f"goal_gain_{tdee}_{tdee*1.2}_{weight}")],
+        [InlineKeyboardButton(text="⚖️ Удержание веса", callback_data=f"goal_maintain_{tdee}_{tdee}_{weight}")]
     ])
 
 @router.callback_query(lambda c: c.data.startswith("goal_"))
 async def process_goal(callback: CallbackQuery):
     parts = callback.data.split("_")
-    if len(parts) < 4:
+    
+    if len(parts) < 5:
         await callback.message.edit_text("Ошибка: неверные данные цели.")
         return
 
@@ -115,11 +116,7 @@ async def process_goal(callback: CallbackQuery):
         goal_type = parts[1]  # 'lose', 'gain' или 'maintain'
         tdee = float(parts[2])  # общий расход калорий
         calories = float(parts[3])  # целевые калории
-
-        # Получаем реальный вес пользователя
-        user_data = await callback.bot.get_chat_member(callback.from_user.id, callback.from_user.id)
-        weight = user_data.user.weight or 70  # Если нет данных о весе — используем 70 кг по умолчанию
-
+        weight = float(parts[4])  # получаем вес из callback_data
     except (ValueError, IndexError):
         await callback.message.edit_text("Ошибка: невозможно рассчитать БЖУ.")
         return
