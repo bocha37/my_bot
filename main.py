@@ -1,13 +1,12 @@
 import asyncio
 from aiogram import Bot, Dispatcher
 from config import BOT_TOKEN
+from handlers import start, callbacks
 
 async def main():
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher()
 
-    # Подключаем роутеры
-    from handlers import callbacks, start
     dp.include_router(start.router)
     dp.include_router(callbacks.router)
 
