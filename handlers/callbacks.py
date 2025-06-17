@@ -93,7 +93,6 @@ async def get_activity(message: Message, state: FSMContext):
         bmr = (10 * weight) + (6.25 * height) - (5 * age) - 161
 
     tdee = round(bmr * data["activity"])
-
     await state.update_data(tdee=tdee)
     await message.answer("Выберите цель:", reply_markup=get_goal_keyboard(tdee))
     await state.clear()
@@ -116,7 +115,11 @@ async def process_goal(callback: CallbackQuery):
         goal_type = parts[1]  # 'lose', 'gain' или 'maintain'
         tdee = float(parts[2])  # общий расход калорий
         calories = float(parts[3])  # целевые калории
-        weight = tdee / 10  # приблизительный вес пользователя из TDEE
+
+        # Получаем реальный вес пользователя
+        user_data = await callback.bot.get_chat_member(callback.from_user.id, callback.from_user.id)
+        weight = user_data.user.weight or 70  # Если нет данных о весе — используем 70 кг по умолчанию
+
     except (ValueError, IndexError):
         await callback.message.edit_text("Ошибка: невозможно рассчитать БЖУ.")
         return
@@ -160,7 +163,7 @@ async def process_goal(callback: CallbackQuery):
             f"- Белки (яйца, мясо, протеин)\n"
             f"- Полезные жиры (авокадо, орехи, рыбий жир)\n\n"
             f"Добавки для набора массы:\n"
-            f"- Протеин (сывороточный/казеиновый) – основной источник белка\n"
+            f"- Протеиновый коктейль – основной источник белка\n"
             f"- Креатин моногидрат – повышает силовые показатели\n"
             f"- BCAA – минимизация катаболизма мышц\n"
             f"- Гейнер – если сложно есть много еды\n"
