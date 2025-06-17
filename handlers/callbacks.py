@@ -21,7 +21,6 @@ async def calc_bzu(message: Message, state: FSMContext):
     await message.answer("Введите свой вес (кг):")
     await state.set_state(BZUStates.waiting_weight)
 
-# Ввод веса
 @router.message(StateFilter(BZUStates.waiting_weight))
 async def get_weight(message: Message, state: FSMContext):
     try:
@@ -32,7 +31,6 @@ async def get_weight(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("Ошибка: введите число.")
 
-# Ввод роста
 @router.message(StateFilter(BZUStates.waiting_height))
 async def get_height(message: Message, state: FSMContext):
     try:
@@ -43,7 +41,6 @@ async def get_height(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("Ошибка: введите число.")
 
-# Ввод возраста
 @router.message(StateFilter(BZUStates.waiting_age))
 async def get_age(message: Message, state: FSMContext):
     try:
@@ -54,7 +51,6 @@ async def get_age(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("Ошибка: введите число.")
 
-# Ввод пола
 @router.message(StateFilter(BZUStates.waiting_gender))
 async def get_gender(message: Message, state: FSMContext):
     gender = message.text.strip()
@@ -65,7 +61,7 @@ async def get_gender(message: Message, state: FSMContext):
     await state.update_data(gender=gender)
     await message.answer(
         "Выберите уровень активности:\n"
-        "1 – Сидячий\n"
+        "1 – Сидячий (минимум движения)\n"
         "2 – Минимальная активность\n"
         "3 – Средняя активность\n"
         "4 – Высокая активность\n"
@@ -73,7 +69,6 @@ async def get_gender(message: Message, state: FSMContext):
     )
     await state.set_state(BZUStates.waiting_activity)
 
-# Ввод уровня активности
 @router.message(StateFilter(BZUStates.waiting_activity))
 async def get_activity(message: Message, state: FSMContext):
     activity = message.text.strip()
@@ -89,6 +84,7 @@ async def get_activity(message: Message, state: FSMContext):
         await message.answer("Неверный выбор. Введите число от 1 до 5.")
         return
 
+    await state.update_data(activity=activity_map[activity])
     data = await state.get_data()
     weight = data["weight"]
     height = data["height"]
@@ -101,10 +97,10 @@ async def get_activity(message: Message, state: FSMContext):
     else:
         bmr = (10 * weight) + (6.25 * height) - (5 * age) - 161
 
-    tdee = round(bmr * activity_map[activity])
+    tdee = round(bmr * data["activity"])
     await state.update_data(tdee=tdee)
 
-    # Передаем реальный вес в callback_data
+    # Передаем вес в callback_data
     markup = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🔥 Похудение", callback_data=f"goal_lose_{tdee}_{round(tdee * 0.8)}_{weight}")],
         [InlineKeyboardButton(text="📈 Набор массы", callback_data=f"goal_gain_{tdee}_{round(tdee * 1.2)}_{weight}")],
@@ -112,9 +108,8 @@ async def get_activity(message: Message, state: FSMContext):
     ])
 
     await message.answer("Выберите цель:", reply_markup=markup)
-    await state.clear()  # Очищаем FSM
+    await state.clear()  # Очищаем FSM после окончания ввода
 
-# Обработка цели
 @router.callback_query(lambda c: c.data.startswith("goal_"))
 async def process_goal(callback: CallbackQuery):
     parts = callback.data.split("_")
@@ -125,9 +120,9 @@ async def process_goal(callback: CallbackQuery):
 
     try:
         goal_type = parts[1]  # 'lose', 'gain' или 'maintain'
-        tdee = float(parts[2])
-        calories = float(parts[3])
-        weight = float(parts[4])
+        tdee = float(parts[2])  # общий расход калорий
+        calories = float(parts[3])  # целевые калории
+        weight = float(parts[4])  # вес пользователя
     except (ValueError, IndexError):
         await callback.message.edit_text("Ошибка: невозможно рассчитать БЖУ.")
         return
@@ -135,6 +130,7 @@ async def process_goal(callback: CallbackQuery):
     proteins = round(weight * 2)
     fats = round(weight * 0.8)
     carbs = round((calories - proteins * 4 - fats * 9) / 4)
+
     if carbs < 0:
         carbs = 0
 
@@ -256,7 +252,7 @@ async def ask_personal_question(message: Message, state: FSMContext):
     await message.answer("Напишите ваш вопрос:")
     await state.set_state("waiting_for_question")
 
-@router.message(F.text, StateFilter("waiting_for_question"))
+@router.message(StateFilter("waiting_for_question"))
 async def receive_question(message: Message, state: FSMContext):
     user_id = message.from_user.id
     question = message.text
@@ -268,19 +264,16 @@ async def receive_question(message: Message, state: FSMContext):
 @router.message(F.from_user.id == ADMIN_ID, F.reply_to_message)
 async def answer_to_user(message: Message):
     original = message.reply_to_message
-    if not original or not original.text:
-        await message.answer("Не могу определить, кому отвечать.")
-        return
-
     try:
-        # Извлекаем ID из текста
-        user_id = int(original.text.split()[3])  # Например: "Вопрос от пользователя 123456789..."
+        # Извлекаем ID из текста сообщения
+        user_id = int(original.text.split()[3])
     except (IndexError, ValueError):
-        await message.answer("ID пользователя указан некорректно.")
+        await message.answer("Не удалось определить ID пользователя.")
         return
 
     try:
-        await message.bot.send_message(user_id, f"Ответ от эксперта:\n{message.text}")
-        await message.answer("Ответ отправлен пользователю.")
+        # Отправляем ответ пользователю
+        await message.bot.send_message(user_id, f"💬 Ответ от эксперта:\n{message.text}")
+        await message.answer(f"Ответ отправлен пользователю {user_id}.")
     except Exception as e:
-        await message.answer(f"Не удалось отправить ответ: {e}")
+        await message.answer(f"❌ Не удалось отправить ответ: {e}")
