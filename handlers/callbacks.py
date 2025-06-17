@@ -3,7 +3,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import StatesGroup, State
 from aiogram.filters import StateFilter
-from config import BOT_TOKEN, ADMIN_ID
+from config import ADMIN_ID
 
 router = Router()
 
@@ -21,7 +21,7 @@ async def calc_bzu(message: Message, state: FSMContext):
     await message.answer("Введите свой вес (кг):")
     await state.set_state(BZUStates.waiting_weight)
 
-# Вес
+# Ввод веса
 @router.message(StateFilter(BZUStates.waiting_weight))
 async def get_weight(message: Message, state: FSMContext):
     try:
@@ -32,7 +32,7 @@ async def get_weight(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("Ошибка: введите число.")
 
-# Рост
+# Ввод роста
 @router.message(StateFilter(BZUStates.waiting_height))
 async def get_height(message: Message, state: FSMContext):
     try:
@@ -43,7 +43,7 @@ async def get_height(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("Ошибка: введите число.")
 
-# Возраст
+# Ввод возраста
 @router.message(StateFilter(BZUStates.waiting_age))
 async def get_age(message: Message, state: FSMContext):
     try:
@@ -54,7 +54,7 @@ async def get_age(message: Message, state: FSMContext):
     except ValueError:
         await message.answer("Ошибка: введите число.")
 
-# Пол
+# Ввод пола
 @router.message(StateFilter(BZUStates.waiting_gender))
 async def get_gender(message: Message, state: FSMContext):
     gender = message.text.strip()
@@ -73,7 +73,7 @@ async def get_gender(message: Message, state: FSMContext):
     )
     await state.set_state(BZUStates.waiting_activity)
 
-# Уровень активности
+# Ввод уровня активности
 @router.message(StateFilter(BZUStates.waiting_activity))
 async def get_activity(message: Message, state: FSMContext):
     activity = message.text.strip()
@@ -104,17 +104,17 @@ async def get_activity(message: Message, state: FSMContext):
     tdee = round(bmr * activity_map[activity])
     await state.update_data(tdee=tdee)
 
-    # Отправляем кнопки с учётом веса
+    # Передаем реальный вес в callback_data
     markup = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🔥 Похудение", callback_data=f"goal_lose_{tdee}_{tdee*0.8}_{data['weight']}")],
-        [InlineKeyboardButton(text="📈 Набор массы", callback_data=f"goal_gain_{tdee}_{tdee*1.2}_{data['weight']}")],
-        [InlineKeyboardButton(text="⚖️ Удержание веса", callback_data=f"goal_maintain_{tdee}_{tdee}_{data['weight']}")]
+        [InlineKeyboardButton(text="🔥 Похудение", callback_data=f"goal_lose_{tdee}_{round(tdee * 0.8)}_{weight}")],
+        [InlineKeyboardButton(text="📈 Набор массы", callback_data=f"goal_gain_{tdee}_{round(tdee * 1.2)}_{weight}")],
+        [InlineKeyboardButton(text="⚖️ Удержание веса", callback_data=f"goal_maintain_{tdee}_{tdee}_{weight}")]
     ])
 
     await message.answer("Выберите цель:", reply_markup=markup)
-    await state.clear()  # ✅ FSM полностью очищена
+    await state.clear()  # Очищаем FSM
 
-# === Обработка цели ===
+# Обработка цели
 @router.callback_query(lambda c: c.data.startswith("goal_"))
 async def process_goal(callback: CallbackQuery):
     parts = callback.data.split("_")
@@ -123,10 +123,14 @@ async def process_goal(callback: CallbackQuery):
         await callback.message.edit_text("Ошибка: неверные данные цели.")
         return
 
-    goal_type = parts[1]  # 'lose', 'gain' или 'maintain'
-    tdee = float(parts[2])
-    calories = float(parts[3])
-    weight = float(parts[4])
+    try:
+        goal_type = parts[1]  # 'lose', 'gain' или 'maintain'
+        tdee = float(parts[2])
+        calories = float(parts[3])
+        weight = float(parts[4])
+    except (ValueError, IndexError):
+        await callback.message.edit_text("Ошибка: невозможно рассчитать БЖУ.")
+        return
 
     proteins = round(weight * 2)
     fats = round(weight * 0.8)
@@ -187,7 +191,7 @@ async def process_goal(callback: CallbackQuery):
             f"- Правильные порции\n\n"
             f"Добавки для удержания веса:\n"
             f"- Мультивитамины – покрывают дефицит нутриентов\n"
-            f"- Омега-3 – поддерживает сердце и мозг\n"
+            f"- Омега-3 – поддержка сердца и мозга\n"
             f"- Адаптогены – снижают стресс\n"
             f"- Пробиотики – здоровье ЖКТ\n"
             f"- Витамин D – особенно зимой\n"
@@ -199,7 +203,7 @@ async def process_goal(callback: CallbackQuery):
 
     await callback.message.edit_text(answer)
 
-# === Тренировки ===
+# --- Тренировки ---
 @router.message(F.text == "💪 Тренировки")
 async def workouts(message: Message):
     answer = (
@@ -215,10 +219,11 @@ async def workouts(message: Message):
     )
     await message.answer(answer)
 
-# === Питание ===
+# --- Питание ---
 @router.message(F.text == "🥗 Питание")
 async def nutrition(message: Message):
     answer = (
+        "Питание:\n\n"
         "🔥 Для похудения:\n"
         "- Завтрак: гречка + яйца + овощи\n"
         "- Обед: курица + брокколи + киноа\n"
@@ -232,7 +237,7 @@ async def nutrition(message: Message):
     )
     await message.answer(answer)
 
-# === Здоровье ===
+# --- Здоровье ---
 @router.message(F.text == "🩺 Здоровье")
 async def health_tips(message: Message):
     answer = (
@@ -245,13 +250,13 @@ async def health_tips(message: Message):
     )
     await message.answer(answer)
 
-# === Личный вопрос ===
+# --- Личный вопрос ---
 @router.message(F.text == "✉️ Личный вопрос")
-async def ask_question(message: Message, state: FSMContext):
+async def ask_personal_question(message: Message, state: FSMContext):
     await message.answer("Напишите ваш вопрос:")
     await state.set_state("waiting_for_question")
 
-@router.message(StateFilter("waiting_for_question"))
+@router.message(F.text, StateFilter("waiting_for_question"))
 async def receive_question(message: Message, state: FSMContext):
     user_id = message.from_user.id
     question = message.text
@@ -259,10 +264,23 @@ async def receive_question(message: Message, state: FSMContext):
     await message.answer("Ваш вопрос отправлен. Ожидайте ответа.")
     await state.clear()
 
-# === Ответ админа ===
+# --- Ответ админа пользователю ---
 @router.message(F.from_user.id == ADMIN_ID, F.reply_to_message)
 async def answer_to_user(message: Message):
     original = message.reply_to_message
-    user_id = int(original.text.split()[3])  # Получаем ID из текста сообщения
-    await message.bot.send_message(user_id, f"Ответ от эксперта:\n{message.text}")
-    await message.answer("Ответ отправлен пользователю.")
+    if not original or not original.text:
+        await message.answer("Не могу определить, кому отвечать.")
+        return
+
+    try:
+        # Извлекаем ID из текста
+        user_id = int(original.text.split()[3])  # Например: "Вопрос от пользователя 123456789..."
+    except (IndexError, ValueError):
+        await message.answer("ID пользователя указан некорректно.")
+        return
+
+    try:
+        await message.bot.send_message(user_id, f"Ответ от эксперта:\n{message.text}")
+        await message.answer("Ответ отправлен пользователю.")
+    except Exception as e:
+        await message.answer(f"Не удалось отправить ответ: {e}")
